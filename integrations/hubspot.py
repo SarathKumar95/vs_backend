@@ -10,6 +10,8 @@ import httpx
 from fastapi import Request, HTTPException
 from fastapi.responses import HTMLResponse
 import urllib.parse
+from .integration_item import IntegrationItem
+from dateutil import parser
 
 
 from fastapi import Request
@@ -139,9 +141,78 @@ async def get_hubspot_credentials(user_id, org_id):
     return credentials
 
 async def create_integration_item_metadata_object(response_json):
-    # TODO
-    pass
+    """
+    Maps a HubSpot contact JSON response into your IntegrationItem model.
+    """
 
-async def get_items_hubspot(credentials):
-    # TODO
-    pass
+    # Derive a human-readable name
+    props = response_json.get("properties", {})
+    firstname = props.get("firstname")
+    lastname = props.get("lastname")
+    name = (
+        f"{firstname or ''} {lastname or ''}".strip()
+        or props.get("email")
+        or f"Contact {response_json.get('id')}"
+    )
+
+    # Parse timestamps
+    created_at = props.get("createdate") or response_json.get("createdAt")
+    updated_at = props.get("hs_lastmodifieddate") or response_json.get("lastmodifieddate")
+
+    try:
+        creation_time = parser.isoparse(created_at) if isinstance(created_at, str) else None
+    except Exception:
+        creation_time = None
+
+    try:
+        last_modified_time = parser.isoparse(updated_at) if isinstance(updated_at, str) else None
+    except Exception:
+        last_modified_time = None
+
+    integration_item_metadata = IntegrationItem(
+        id=response_json.get("id"),
+        type="HubSpotContact",
+        name=name,
+        creation_time=creation_time,
+        last_modified_time=last_modified_time,
+        url=f"https://app.hubspot.com/contacts/{response_json.get('portalId')}/contact/{response_json.get('id')}"
+        if response_json.get("portalId") else None,
+        directory=False,
+        visibility=True
+    )
+
+    return integration_item_metadata
+
+async def get_items_hubspot(credentials) -> list[IntegrationItem]:
+
+    credentials = json.loads(credentials)
+    access_token = credentials.get("access_token")
+
+    if not access_token:
+        return []
+
+    async with httpx.AsyncClient() as client:
+        # Example: Fetch contacts from HubSpot CRM v3 API
+        response = await client.get(
+            "https://api.hubapi.com/crm/v3/objects/contacts",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            },
+            params={
+                "limit": 50,  # adjust as needed
+                "properties": "firstname,lastname,email,createdate,hs_lastmodifieddate"
+            }
+        )
+
+    if response.status_code == 200:
+
+        results = response.json().get("results", [])
+
+        list_of_integration_item_metadata = [
+            await create_integration_item_metadata_object(result) for result in results
+        ]
+
+        return list_of_integration_item_metadata
+    
+    return []
