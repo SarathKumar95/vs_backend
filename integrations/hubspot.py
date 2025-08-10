@@ -21,10 +21,8 @@ load_dotenv()
 CLIENT_ID = os.getenv('HUBSPOT_CLIENT_ID')
 CLIENT_SECRET = os.getenv('HUBSPOT_CLIENT_SECRET')
 
-SCOPES = [
-    "crm.objects.contacts.write",
-    "crm.schemas.contacts.write",
-    "oauth",
+SCOPES_REQUIRED = ["oauth"]
+SCOPES_OPTIONAL = [
     "crm.schemas.contacts.read",
     "crm.objects.contacts.read"
 ]
@@ -36,7 +34,6 @@ encoded_client_id_secret = base64.b64encode(f'{CLIENT_ID}:{CLIENT_SECRET}'.encod
 REDIRECT_URI = 'http://localhost:8000/integrations/hubspot/oauth2callback'
 encoded_redirect_uri= urllib.parse.quote(REDIRECT_URI, safe='')
 authorization_url=f"https://app-na2.hubspot.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri=http://localhost:8000/integrations/hubspot/oauth2callback&scope=crm.objects.contacts.write%20crm.schemas.contacts.write%20oauth%20crm.schemas.contacts.read%20crm.objects.contacts.read"
-
 
 async def authorize_hubspot(user_id, org_id):
     state_data = {
@@ -53,24 +50,20 @@ async def authorize_hubspot(user_id, org_id):
         expire=600
     )
 
-    scope_str = " ".join(SCOPES) if isinstance(SCOPES, (list, tuple)) else SCOPES
-
     params = {
         "client_id": CLIENT_ID,
-        "redirect_uri": urllib.parse.quote(REDIRECT_URI, safe=""),
-        "scope": urllib.parse.quote(scope_str, safe=""),
+        "redirect_uri": REDIRECT_URI,
+        "scope": " ".join(SCOPES_REQUIRED),
+        "optional_scope": " ".join(SCOPES_OPTIONAL),
         "state": encoded_state
     }
 
-    auth_url = (
-        f"https://app-na2.hubspot.com/oauth/authorize"
-        f"?client_id={params['client_id']}"
-        f"&redirect_uri={params['redirect_uri']}"
-        f"&scope={params['scope']}"
-        f"&state={urllib.parse.quote(params['state'], safe='')}"
-    )
+    # urlencode with safe=' ' so spaces stay encoded as %20
+    query_str = urllib.parse.urlencode(params, safe=' ')
+    auth_url = f"https://app-na2.hubspot.com/oauth/authorize?{query_str}"
 
     return auth_url
+
 
 async def oauth2callback_hubspot(request: Request):
     if request.query_params.get('error'):
