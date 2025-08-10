@@ -127,8 +127,16 @@ async def oauth2callback_hubspot(request: Request):
 
 
 async def get_hubspot_credentials(user_id, org_id):
-    # TODO
-    pass
+    credentials = await get_value_redis(f'hubspot_credentials:{org_id}:{user_id}')
+    if not credentials:
+        raise HTTPException(status_code=400, detail='No credentials found.')
+    
+    credentials = json.loads(credentials)
+    if not credentials:
+        raise HTTPException(status_code=400, detail='No credentials found.')
+
+    await delete_key_redis(f'hubspot_credentials:{org_id}:{user_id}')
+    return credentials
 
 async def create_integration_item_metadata_object(response_json):
     # TODO
