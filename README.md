@@ -3,8 +3,9 @@
 ## Setup
 
 1. Navigate to `/backend` folder.
-2. Ideally its better to setup a virtual env ( python3 -m venv 'environment name' )
-3. Sensitive credentials (like client IDs, secrets, tokens) are **not included** in the repo for security reasons. Please create a `.env` file in the backend root directories based on `.env.example` file provided (or create your own) with the following variables: 
+2. Ideally its better to setup a virtual environment ( python3 -m venv 'environment name' )
+3. Activate the virtual environment depending on the platform.
+4. Sensitive credentials (like client IDs, secrets, tokens) are **not included** in the repo for security reasons. Please create a `.env` file in the backend root directories based on `.env.example` file provided (or create your own) with the following variables: 
 
    ### Backend example (`.env`):
 
@@ -22,12 +23,12 @@
 
    ### ### ### 
 
-4. Start Redis server - setup using docker
+5. Start Redis server - setup using docker
    1. docker pull redis
    2. docker run --name my-redis -p 6379:6379 -d redis
    3. docker exec -it my-redis redis-cli -h 127.0.0.1 -p 6379 ( to check if the server is alive )
 
-5. Run FastAPI backend - uvicorn main:app --reload
+6. Run FastAPI backend - uvicorn main:app --reload
 
 
 
