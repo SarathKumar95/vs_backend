@@ -1,7 +1,7 @@
 # notion.py
 
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 import json
 import secrets
 from fastapi import Request, HTTPException
