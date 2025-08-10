@@ -141,24 +141,27 @@ def create_integration_item_metadata_object(
 
     return integration_item_metadata
 
+import httpx  # since you use async code elsewhere, switch to async client
+
 async def get_items_notion(credentials) -> list[IntegrationItem]:
-    """Aggregates all metadata relevant for a notion integration"""
     credentials = json.loads(credentials)
-    response = requests.post(
-        'https://api.notion.com/v1/search',
-        headers={
-            'Authorization': f'Bearer {credentials.get("access_token")}',
-            'Notion-Version': '2022-06-28',
-        },
-    )
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            'https://api.notion.com/v1/search',
+            json={},  # empty JSON body is needed for search
+            headers={
+                'Authorization': f'Bearer {credentials.get("access_token")}',
+                'Notion-Version': '2022-06-28',
+            },
+        )
 
     if response.status_code == 200:
-        results = response.json()['results']
-        list_of_integration_item_metadata = []
-        for result in results:
-            list_of_integration_item_metadata.append(
-                create_integration_item_metadata_object(result)
-            )
+        results = response.json().get('results', [])
+        list_of_integration_item_metadata = [
+            create_integration_item_metadata_object(result) for result in results
+        ]
+        return list_of_integration_item_metadata
 
-        print(list_of_integration_item_metadata)
-    return
+    # handle errors or empty
+    return []
