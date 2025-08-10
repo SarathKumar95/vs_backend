@@ -9,6 +9,7 @@ import base64
 import httpx
 from fastapi import Request, HTTPException
 from fastapi.responses import HTMLResponse
+import urllib.parse
 
 
 from fastapi import Request
@@ -20,22 +21,56 @@ load_dotenv()
 CLIENT_ID = os.getenv('HUBSPOT_CLIENT_ID')
 CLIENT_SECRET = os.getenv('HUBSPOT_CLIENT_SECRET')
 
+SCOPES = [
+    "crm.objects.contacts.write",
+    "crm.schemas.contacts.write",
+    "oauth",
+    "crm.schemas.contacts.read",
+    "crm.objects.contacts.read"
+]
+
+
 encoded_client_id_secret = base64.b64encode(f'{CLIENT_ID}:{CLIENT_SECRET}'.encode()).decode()
 
 
+REDIRECT_URI = 'http://localhost:8000/integrations/hubspot/oauth2callback'
+encoded_redirect_uri= urllib.parse.quote(REDIRECT_URI, safe='')
 authorization_url=f"https://app-na2.hubspot.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri=http://localhost:8000/integrations/hubspot/oauth2callback&scope=crm.objects.contacts.write%20crm.schemas.contacts.write%20oauth%20crm.schemas.contacts.read%20crm.objects.contacts.read"
 
 
 async def authorize_hubspot(user_id, org_id):
     state_data = {
-        'state': secrets.token_urlsafe(32),
-        'user_id': user_id,
-        'org_id': org_id
+        "state": secrets.token_urlsafe(32),
+        "user_id": user_id,
+        "org_id": org_id
     }
     encoded_state = json.dumps(state_data)
-    await add_key_value_redis(f'hubspot_state:{org_id}:{user_id}', encoded_state, expire=600)
 
-    return f'{authorization_url}&state={encoded_state}'
+    # Save state to Redis for validation later
+    await add_key_value_redis(
+        f"hubspot_state:{org_id}:{user_id}",
+        encoded_state,
+        expire=600
+    )
+
+    scope_str = " ".join(SCOPES) if isinstance(SCOPES, (list, tuple)) else SCOPES
+
+    params = {
+        "client_id": CLIENT_ID,
+        "redirect_uri": urllib.parse.quote(REDIRECT_URI, safe=""),
+        "scope": urllib.parse.quote(scope_str, safe=""),
+        "state": encoded_state
+    }
+
+    auth_url = (
+        f"https://app-na2.hubspot.com/oauth/authorize"
+        f"?client_id={params['client_id']}"
+        f"&redirect_uri={params['redirect_uri']}"
+        f"&scope={params['scope']}"
+        f"&state={urllib.parse.quote(params['state'], safe='')}"
+    )
+
+    return auth_url
 
 async def oauth2callback_hubspot(request: Request):
     if request.query_params.get('error'):
@@ -67,9 +102,9 @@ async def oauth2callback_hubspot(request: Request):
     }
     data = {
         "grant_type": "authorization_code",
-        "client_id": HUBSPOT_CLIENT_ID,
-        "client_secret": HUBSPOT_CLIENT_SECRET,
-        "redirect_uri": HUBSPOT_REDIRECT_URI,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "redirect_uri": REDIRECT_URI,
         "code": code
     }
 
